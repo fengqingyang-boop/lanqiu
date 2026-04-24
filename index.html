@@ -271,12 +271,12 @@
                 };
 
                 const BALL_RADIUS = 2;
-                const GRAVITY = -25;
-                const BOUNCE_COEFFICIENT = 0.65;
-                const AIR_RESISTANCE = 0.998;
+                const GRAVITY = -15;
+                const BOUNCE_COEFFICIENT = 0.7;
+                const AIR_RESISTANCE = 0.999;
                 const GROUND_FRICTION = 0.95;
                 const REST_VELOCITY_THRESHOLD = 0.5;
-                const REST_TIME_THRESHOLD = 1000;
+                const REST_TIME_THRESHOLD = 1500;
                 const MIN_BOUNCE_INTERVAL = 50;
 
                 const gameState = ref(GAME_STATE.IDLE);
@@ -638,100 +638,111 @@
                 }
 
                 function startPhysicsLoop() {
+                    const fixedDt = 1 / 60;
+                    let accumulator = 0;
+                    
                     function update(currentTime) {
                         if (gameState.value !== GAME_STATE.FALLING) return;
 
-                        const deltaTime = Math.min((currentTime - lastFrameTime) / 1000, 0.05);
+                        const frameTime = Math.min((currentTime - lastFrameTime) / 1000, 0.05);
                         lastFrameTime = currentTime;
 
                         gameTime.value = (currentTime - startTime) / 1000;
 
-                        velocity.y += GRAVITY * deltaTime;
-                        velocity.x *= AIR_RESISTANCE;
-                        velocity.y *= AIR_RESISTANCE;
-                        velocity.z *= AIR_RESISTANCE;
-
-                        position.x += velocity.x * deltaTime * 60;
-                        position.y += velocity.y * deltaTime * 60;
-                        position.z += velocity.z * deltaTime * 60;
-
-                        basketball.rotation.x += angularVelocity.x * deltaTime;
-                        basketball.rotation.y += angularVelocity.y * deltaTime;
-                        basketball.rotation.z += angularVelocity.z * deltaTime;
-
-                        angularVelocity.x *= 0.99;
-                        angularVelocity.y *= 0.99;
-                        angularVelocity.z *= 0.99;
-
-                        const groundY = -BALL_RADIUS;
+                        accumulator += frameTime;
                         
-                        if (position.y <= groundY + 0.01) {
-                            position.y = groundY;
+                        while (accumulator >= fixedDt) {
+                            velocity.y += GRAVITY * fixedDt;
+                            velocity.x *= AIR_RESISTANCE;
+                            velocity.y *= AIR_RESISTANCE;
+                            velocity.z *= AIR_RESISTANCE;
 
-                            const bounceSpeed = Math.abs(velocity.y);
+                            position.x += velocity.x * fixedDt;
+                            position.y += velocity.y * fixedDt;
+                            position.z += velocity.z * fixedDt;
+
+                            angularVelocity.x *= 0.995;
+                            angularVelocity.y *= 0.995;
+                            angularVelocity.z *= 0.995;
+
+                            const groundY = -BALL_RADIUS;
                             
-                            if (bounceSpeed > REST_VELOCITY_THRESHOLD && 
-                                currentTime - lastBounceTime > MIN_BOUNCE_INTERVAL) {
-                                velocity.y = -velocity.y * BOUNCE_COEFFICIENT;
-                                velocity.x *= GROUND_FRICTION;
-                                velocity.z *= GROUND_FRICTION;
-                                
-                                const bounceRotFactor = velocity.y > 0 ? 0.3 : 0;
-                                angularVelocity.x += velocity.x * bounceRotFactor;
-                                angularVelocity.z += velocity.z * bounceRotFactor;
-                                
-                                bounceCount.value++;
-                                lastBounceTime = currentTime;
-                                restStartTime = null;
-                                isOnGround = false;
-                            } else {
-                                if (!isOnGround) {
-                                    isOnGround = true;
-                                    restStartTime = currentTime;
-                                }
-                                
-                                if (restStartTime !== null && 
-                                    currentTime - restStartTime > REST_TIME_THRESHOLD) {
-                                    const totalVelocity = Math.sqrt(
-                                        velocity.x * velocity.x + 
-                                        velocity.y * velocity.y + 
-                                        velocity.z * velocity.z
-                                    );
-                                    const totalAngularVelocity = Math.sqrt(
-                                        angularVelocity.x * angularVelocity.x + 
-                                        angularVelocity.y * angularVelocity.y + 
-                                        angularVelocity.z * angularVelocity.z
-                                    );
+                            if (position.y <= groundY) {
+                                position.y = groundY;
+
+                                if (velocity.y < 0) {
+                                    const bounceSpeed = Math.abs(velocity.y);
                                     
-                                    if (totalVelocity < REST_VELOCITY_THRESHOLD * 0.5 && 
-                                        totalAngularVelocity < 0.5) {
-                                        endGame();
-                                        return;
+                                    if (bounceSpeed > REST_VELOCITY_THRESHOLD && 
+                                        currentTime - lastBounceTime > MIN_BOUNCE_INTERVAL) {
+                                        velocity.y = -velocity.y * BOUNCE_COEFFICIENT;
+                                        velocity.x *= GROUND_FRICTION;
+                                        velocity.z *= GROUND_FRICTION;
+                                        
+                                        const bounceRotFactor = 0.3;
+                                        angularVelocity.x += velocity.x * bounceRotFactor;
+                                        angularVelocity.z += velocity.z * bounceRotFactor;
+                                        
+                                        bounceCount.value++;
+                                        lastBounceTime = currentTime;
+                                        restStartTime = null;
+                                        isOnGround = false;
+                                    } else {
+                                        if (!isOnGround) {
+                                            isOnGround = true;
+                                            restStartTime = currentTime;
+                                        }
+                                        
+                                        velocity.y = 0;
+                                        velocity.x *= 0.95;
+                                        velocity.z *= 0.95;
+                                        angularVelocity.x *= 0.9;
+                                        angularVelocity.y *= 0.9;
+                                        angularVelocity.z *= 0.9;
                                     }
                                 }
-                                
-                                velocity.y = 0;
-                                velocity.x *= 0.95;
-                                velocity.z *= 0.95;
-                                angularVelocity.x *= 0.9;
-                                angularVelocity.y *= 0.9;
-                                angularVelocity.z *= 0.9;
+                            } else {
+                                isOnGround = false;
                             }
-                        } else {
-                            isOnGround = false;
+
+                            if (isOnGround && restStartTime !== null && 
+                                currentTime - restStartTime > REST_TIME_THRESHOLD) {
+                                const totalVelocity = Math.sqrt(
+                                    velocity.x * velocity.x + 
+                                    velocity.y * velocity.y + 
+                                    velocity.z * velocity.z
+                                );
+                                const totalAngularVelocity = Math.sqrt(
+                                    angularVelocity.x * angularVelocity.x + 
+                                    angularVelocity.y * angularVelocity.y + 
+                                    angularVelocity.z * angularVelocity.z
+                                );
+                                
+                                if (totalVelocity < REST_VELOCITY_THRESHOLD * 0.3 && 
+                                    totalAngularVelocity < 0.5) {
+                                    endGame();
+                                    return;
+                                }
+                            }
+
+                            const boundary = 15;
+                            if (Math.abs(position.x) > boundary) {
+                                position.x = Math.sign(position.x) * boundary;
+                                velocity.x = -velocity.x * BOUNCE_COEFFICIENT * 0.8;
+                                angularVelocity.y = -angularVelocity.y * 0.8;
+                            }
+                            if (Math.abs(position.z) > boundary) {
+                                position.z = Math.sign(position.z) * boundary;
+                                velocity.z = -velocity.z * BOUNCE_COEFFICIENT * 0.8;
+                                angularVelocity.x = -angularVelocity.x * 0.8;
+                            }
+
+                            accumulator -= fixedDt;
                         }
 
-                        const boundary = 15;
-                        if (Math.abs(position.x) > boundary) {
-                            position.x = Math.sign(position.x) * boundary;
-                            velocity.x = -velocity.x * BOUNCE_COEFFICIENT * 0.8;
-                            angularVelocity.y = -angularVelocity.y * 0.8;
-                        }
-                        if (Math.abs(position.z) > boundary) {
-                            position.z = Math.sign(position.z) * boundary;
-                            velocity.z = -velocity.z * BOUNCE_COEFFICIENT * 0.8;
-                            angularVelocity.x = -angularVelocity.x * 0.8;
-                        }
+                        basketball.rotation.x += angularVelocity.x * fixedDt;
+                        basketball.rotation.y += angularVelocity.y * fixedDt;
+                        basketball.rotation.z += angularVelocity.z * fixedDt;
 
                         basketball.position.set(position.x, position.y, position.z);
 
