@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>篮球游戏</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            position: relative;
+            perspective: 1000px;
+            overflow: hidden;
+        }
+
+        .game-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+        }
+
+        .ground {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 80px;
+            background: linear-gradient(90deg, #2d5016 0%, #4a7c23 50%, #2d5016 100%);
+            border-top: 4px solid #1a3009;
+            box-shadow: 0 -5px 30px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+
+        .ground::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 50px,
+                rgba(255, 255, 255, 0.05) 50px,
+                rgba(255, 255, 255, 0.05) 100px
+            );
+        }
+
+        .basketball-wrapper {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            z-index: 5;
+            transition: left 0s, top 0s;
+        }
+
+        .basketball {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ff8c42 0%, #e65100 40%, #bf360c 70%, #8b1d00 100%);
+            box-shadow: 
+                inset -10px -10px 30px rgba(0, 0, 0, 0.6),
+                inset 10px 10px 30px rgba(255, 255, 255, 0.1),
+                0 10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+            cursor: grab;
+            transform-style: preserve-3d;
+        }
+
+        .basketball.dragging {
+            cursor: grabbing;
+        }
+
+        .basketball .line {
+            position: absolute;
+            border: 2px solid rgba(0, 0, 0, 0.3);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .basketball .horizontal {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.3);
+            border: none;
+            border-radius: 0;
+        }
+
+        .basketball .vertical {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.3);
+            border: none;
+            border-radius: 0;
+        }
+
+        .basketball .curve-1 {
+            width: 120px;
+            height: 120px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .basketball .curve-2 {
+            width: 160px;
+            height: 160px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .shadow {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4) 0%, transparent 70%);
+            transform: translateX(-50%);
+            z-index: 3;
+            pointer-events: none;
+            transition: width 0.05s, height 0.05s, left 0s, bottom 0s, opacity 0.05s;
+        }
+
+        .instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px 30px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            z-index: 20;
+            backdrop-filter: blur(5px);
+        }
+
+        .instructions h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+            color: #ff8c42;
+        }
+
+        .instructions p {
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+
+        .status-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            z-index: 20;
+            backdrop-filter: blur(5px);
+            min-width: 150px;
+        }
+
+        .status-bar h4 {
+            margin-bottom: 8px;
+            color: #ff8c42;
+        }
+
+        .status-bar p {
+            font-size: 14px;
+            margin: 5px 0;
+        }
+
+        .status-bar .value {
+            color: #4ade80;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .game-over-panel {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 2px solid #ff8c42;
+            border-radius: 20px;
+            padding: 50px 60px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(255, 140, 66, 0.3);
+            animation: panel-appear 0.5s ease-out;
+        }
+
+        @keyframes panel-appear {
+            0% {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .game-over-panel h2 {
+            color: #ff8c42;
+            font-size: 36px;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .game-over-panel .stats {
+            margin-bottom: 30px;
+        }
+
+        .game-over-panel .stat-item {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .game-over-panel .stat-item p:first-child {
+            color: #a0a0a0;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .game-over-panel .stat-item p:last-child {
+            color: #4ade80;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .restart-btn {
+            background: linear-gradient(135deg, #ff8c42 0%, #e65100 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        .restart-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(255, 140, 66, 0.4);
+        }
+
+        .restart-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .zoom-indicator {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+            z-index: 20;
+            backdrop-filter: blur(5px);
+        }
+
+        .zoom-bar {
+            width: 150px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .zoom-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff8c42, #e65100);
+            border-radius: 3px;
+            transition: width 0.1s ease;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="game-container">
+            <div class="instructions">
+                <h3>游戏说明</h3>
+                <p>🖱️ 按住左键拖动：旋转篮球</p>
+                <p>🔄 鼠标滚轮：拉近/拉远视野</p>
+                <p>⌨️ 空格键：自由落体开始游戏</p>
+            </div>
+
+            <div class="status-bar">
+                <h4>游戏状态</h4>
+                <p>状态: <span class="value">{{ gameStatusText }}</span></p>
+                <p v-if="isFalling || isGameOver">弹跳次数: <span class="value">{{ bounceCount }}</span></p>
+                <p v-if="isFalling || isGameOver">游戏时间: <span class="value">{{ gameTime.toFixed(2) }}秒</span></p>
+            </div>
+
+            <div class="zoom-indicator">
+                视野: {{ Math.round(zoomPercent) }}%
+                <div class="zoom-bar">
+                    <div class="zoom-bar-fill" :style="{ width: zoomPercent + '%' }"></div>
+                </div>
+            </div>
+
+            <div 
+                class="basketball-wrapper"
+                :style="wrapperStyle"
+            >
+                <div 
+                    class="basketball"
+                    :class="{ dragging: isDragging }"
+                    :style="basketballStyle"
+                    @mousedown="handleMouseDown"
+                    @mousemove="handleMouseMove"
+                    @mouseup="handleMouseUp"
+                    @mouseleave="handleMouseUp"
+                >
+                    <div class="horizontal"></div>
+                    <div class="vertical"></div>
+                    <div class="line curve-1"></div>
+                    <div class="line curve-2"></div>
+                </div>
+            </div>
+
+            <div 
+                class="shadow"
+                :style="shadowStyle"
+            ></div>
+
+            <div class="ground"></div>
+
+            <div class="game-over-overlay" v-if="isGameOver">
+                <div class="game-over-panel">
+                    <h2>游戏结束</h2>
+                    <div class="stats">
+                        <div class="stat-item">
+                            <p>篮球弹跳次数</p>
+                            <p>{{ finalBounceCount }} 次</p>
+                        </div>
+                        <div class="stat-item">
+                            <p>从落下到静止的时间</p>
+                            <p>{{ finalGameTime.toFixed(2) }} 秒</p>
+                        </div>
+                    </div>
+                    <button class="restart-btn" @click="restartGame">
+                        重新开始
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+        createApp({
+            setup() {
+                const GAME_STATE = {
+                    IDLE: 'idle',
+                    DRAGGING: 'dragging',
+                    FALLING: 'falling',
+                    GAME_OVER: 'game_over'
+                };
+
+                const BALL_RADIUS = 100;
+                const GRAVITY = 980;
+                const BOUNCE_COEFFICIENT = 0.8;
+                const AIR_RESISTANCE = 0.998;
+                const GROUND_FRICTION = 0.95;
+                const REST_VELOCITY_THRESHOLD = 15;
+                const BOUNCE_VELOCITY_THRESHOLD = 25;
+                const REST_TIME_THRESHOLD = 1000;
+                const MIN_BOUNCE_INTERVAL = 30;
+
+                const gameState = ref(GAME_STATE.IDLE);
+                const isDragging = ref(false);
+                const isFalling = ref(false);
+                const isGameOver = ref(false);
+
+                const rotationX = ref(0);
+                const rotationY = ref(0);
+                const angularVelocityX = ref(0);
+                const angularVelocityY = ref(0);
+
+                const positionY = ref(0);
+                const velocityY = ref(0);
+                const positionX = ref(0);
+                const velocityX = ref(0);
+
+                const zoom = ref(1);
+                const MIN_ZOOM = 0.3;
+                const MAX_ZOOM = 2;
+
+                const bounceCount = ref(0);
+                const finalBounceCount = ref(0);
+                const gameTime = ref(0);
+                const finalGameTime = ref(0);
+                const lastBounceTime = ref(0);
+                const restStartTime = ref(null);
+                const isOnGround = ref(false);
+
+                const lastMouseX = ref(0);
+                const lastMouseY = ref(0);
+
+                const gameLoop = ref(null);
+                const startTime = ref(0);
+                const lastFrameTime = ref(0);
+
+                const groundHeight = 80;
+
+                const gameStatusText = computed(() => {
+                    switch (gameState.value) {
+                        case GAME_STATE.IDLE: return '等待开始';
+                        case GAME_STATE.DRAGGING: return '旋转中';
+                        case GAME_STATE.FALLING: return '游戏中';
+                        case GAME_STATE.GAME_OVER: return '已结束';
+                        default: return '未知';
+                    }
+                });
+
+                const zoomPercent = computed(() => {
+                    return ((zoom.value - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)) * 100;
+                });
+
+                const wrapperStyle = computed(() => {
+                    const centerY = window.innerHeight / 2;
+                    const groundTop = window.innerHeight - groundHeight;
+                    const ballBottom = centerY + positionY.value + BALL_RADIUS * zoom.value;
+                    const maxY = groundTop - BALL_RADIUS * zoom.value - centerY;
+
+                    let currentY = positionY.value;
+                    if (isFalling.value && currentY > maxY) {
+                        currentY = maxY;
+                    }
+
+                    return {
+                        left: `${50 + positionX.value}%`,
+                        top: '50%',
+                        width: `${BALL_RADIUS * 2 * zoom.value}px`,
+                        height: `${BALL_RADIUS * 2 * zoom.value}px`
+                    };
+                });
+
+                const basketballStyle = computed(() => {
+                    return {
+                        transform: `rotateX(${rotationX.value}deg) rotateY(${rotationY.value}deg) scale(${zoom.value})`,
+                        transformOrigin: 'center center'
+                    };
+                });
+
+                const shadowStyle = computed(() => {
+                    const centerY = window.innerHeight / 2;
+                    const ballCenterY = centerY + positionY.value;
+                    const groundTop = window.innerHeight - groundHeight;
+                    const distanceToGround = groundTop - ballCenterY;
+                    
+                    const maxDistance = window.innerHeight * 0.6;
+                    const normalizedDistance = Math.min(Math.max(distanceToGround / maxDistance, 0), 1);
+                    
+                    const shadowWidth = BALL_RADIUS * 2 * zoom.value * (1 - normalizedDistance * 0.6);
+                    const shadowHeight = BALL_RADIUS * 0.5 * zoom.value * (1 - normalizedDistance * 0.6);
+                    const shadowOpacity = 0.5 * (1 - normalizedDistance);
+
+                    return {
+                        left: `${50 + positionX.value}%`,
+                        bottom: `${groundHeight}px`,
+                        width: `${shadowWidth}px`,
+                        height: `${shadowHeight}px`,
+                        opacity: shadowOpacity
+                    };
+                });
+
+                const handleMouseDown = (e) => {
+                    if (gameState.value !== GAME_STATE.IDLE && gameState.value !== GAME_STATE.DRAGGING) {
+                        return;
+                    }
+                    
+                    isDragging.value = true;
+                    gameState.value = GAME_STATE.DRAGGING;
+                    lastMouseX.value = e.clientX;
+                    lastMouseY.value = e.clientY;
+                };
+
+                const handleMouseMove = (e) => {
+                    if (!isDragging.value) return;
+
+                    const deltaX = e.clientX - lastMouseX.value;
+                    const deltaY = e.clientY - lastMouseY.value;
+
+                    rotationY.value += deltaX * 0.5;
+                    rotationX.value -= deltaY * 0.5;
+
+                    angularVelocityY.value = deltaX * 3;
+                    angularVelocityX.value = -deltaY * 3;
+
+                    lastMouseX.value = e.clientX;
+                    lastMouseY.value = e.clientY;
+                };
+
+                const handleMouseUp = () => {
+                    isDragging.value = false;
+                    if (gameState.value === GAME_STATE.DRAGGING) {
+                        gameState.value = GAME_STATE.IDLE;
+                    }
+                };
+
+                const handleWheel = (e) => {
+                    e.preventDefault();
+                    if (gameState.value === GAME_STATE.FALLING || gameState.value === GAME_STATE.GAME_OVER) {
+                        return;
+                    }
+
+                    const delta = e.deltaY > 0 ? -0.05 : 0.05;
+                    zoom.value = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom.value + delta));
+                };
+
+                const handleKeydown = (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        if (gameState.value === GAME_STATE.IDLE || gameState.value === GAME_STATE.DRAGGING) {
+                            startFalling();
+                        }
+                    }
+                };
+
+                const startFalling = () => {
+                    if (isFalling.value) return;
+                    
+                    gameState.value = GAME_STATE.FALLING;
+                    isFalling.value = true;
+                    velocityY.value = 0;
+                    velocityX.value = angularVelocityY.value * 0.1;
+                    bounceCount.value = 0;
+                    gameTime.value = 0;
+                    lastBounceTime.value = 0;
+                    restStartTime.value = null;
+                    
+                    startTime.value = performance.now();
+                    lastFrameTime.value = startTime.value;
+                    
+                    lastBounceTime.value = startTime.value;
+                    
+                    startGameLoop();
+                };
+
+                const startGameLoop = () => {
+                    if (gameLoop.value) {
+                        cancelAnimationFrame(gameLoop.value);
+                    }
+
+                    const update = (currentTime) => {
+                        const deltaTime = (currentTime - lastFrameTime.value) / 1000;
+                        lastFrameTime.value = currentTime;
+
+                        gameTime.value = (currentTime - startTime.value) / 1000;
+
+                        velocityY.value += GRAVITY * deltaTime;
+                        velocityY.value *= AIR_RESISTANCE;
+                        velocityX.value *= AIR_RESISTANCE;
+
+                        positionY.value += velocityY.value * deltaTime;
+                        positionX.value += velocityX.value * deltaTime;
+
+                        rotationX.value += angularVelocityX.value * deltaTime;
+                        rotationY.value += angularVelocityY.value * deltaTime;
+                        angularVelocityX.value *= 0.99;
+                        angularVelocityY.value *= 0.99;
+
+                        const groundTop = window.innerHeight - groundHeight;
+                        const centerY = window.innerHeight / 2;
+                        const ballRadiusScaled = BALL_RADIUS * zoom.value;
+                        const ballBottom = centerY + positionY.value + ballRadiusScaled;
+
+                        if (ballBottom >= groundTop) {
+                            positionY.value = groundTop - centerY - ballRadiusScaled;
+
+                            if (velocityY.value > BOUNCE_VELOCITY_THRESHOLD && 
+                                currentTime - lastBounceTime.value > MIN_BOUNCE_INTERVAL) {
+                                velocityY.value = -velocityY.value * BOUNCE_COEFFICIENT;
+                                velocityX.value *= GROUND_FRICTION;
+                                bounceCount.value++;
+                                lastBounceTime.value = currentTime;
+                                angularVelocityX.value *= 0.9;
+                                angularVelocityY.value *= 0.9;
+                                restStartTime.value = null;
+                                isOnGround.value = false;
+                            } else {
+                                if (!isOnGround.value) {
+                                    isOnGround.value = true;
+                                    restStartTime.value = currentTime;
+                                }
+                                
+                                if (restStartTime.value !== null && 
+                                    currentTime - restStartTime.value > REST_TIME_THRESHOLD) {
+                                    const totalVelocity = Math.sqrt(velocityY.value * velocityY.value + velocityX.value * velocityX.value);
+                                    const totalAngularVelocity = Math.sqrt(angularVelocityX.value * angularVelocityX.value + angularVelocityY.value * angularVelocityY.value);
+                                    
+                                    if (totalVelocity < REST_VELOCITY_THRESHOLD && totalAngularVelocity < 2) {
+                                        endGame();
+                                        return;
+                                    }
+                                }
+                                velocityY.value = 0;
+                                velocityX.value *= 0.95;
+                                angularVelocityX.value *= 0.95;
+                                angularVelocityY.value *= 0.95;
+                            }
+                        } else {
+                            isOnGround.value = false;
+                        }
+
+                        const screenWidth = window.innerWidth;
+                        const ballLeft = (window.innerWidth / 2) + (positionX.value / 100 * window.innerWidth) - ballRadiusScaled;
+                        const ballRight = (window.innerWidth / 2) + (positionX.value / 100 * window.innerWidth) + ballRadiusScaled;
+
+                        if (ballLeft <= 0 || ballRight >= screenWidth) {
+                            if (ballLeft <= 0) {
+                                positionX.value = ((-window.innerWidth / 2 + ballRadiusScaled) / window.innerWidth) * 100;
+                            } else {
+                                positionX.value = ((window.innerWidth / 2 - ballRadiusScaled) / window.innerWidth) * 100;
+                            }
+                            velocityX.value = -velocityX.value * BOUNCE_COEFFICIENT * 0.8;
+                            angularVelocityY.value = -angularVelocityY.value * 0.8;
+                        }
+
+                        gameLoop.value = requestAnimationFrame(update);
+                    };
+
+                    gameLoop.value = requestAnimationFrame(update);
+                };
+
+                const endGame = () => {
+                    if (gameLoop.value) {
+                        cancelAnimationFrame(gameLoop.value);
+                        gameLoop.value = null;
+                    }
+
+                    gameState.value = GAME_STATE.GAME_OVER;
+                    isGameOver.value = true;
+                    isFalling.value = false;
+                    finalBounceCount.value = bounceCount.value;
+                    finalGameTime.value = gameTime.value;
+                };
+
+                const restartGame = () => {
+                    if (gameLoop.value) {
+                        cancelAnimationFrame(gameLoop.value);
+                        gameLoop.value = null;
+                    }
+
+                    gameState.value = GAME_STATE.IDLE;
+                    isFalling.value = false;
+                    isGameOver.value = false;
+
+                    rotationX.value = 0;
+                    rotationY.value = 0;
+                    angularVelocityX.value = 0;
+                    angularVelocityY.value = 0;
+
+                    positionY.value = 0;
+                    velocityY.value = 0;
+                    positionX.value = 0;
+                    velocityX.value = 0;
+
+                    zoom.value = 1;
+
+                    bounceCount.value = 0;
+                    finalBounceCount.value = 0;
+                    gameTime.value = 0;
+                    finalGameTime.value = 0;
+                    lastBounceTime.value = 0;
+                    restStartTime.value = null;
+                    isOnGround.value = false;
+                };
+
+                onMounted(() => {
+                    window.addEventListener('keydown', handleKeydown);
+                    window.addEventListener('wheel', handleWheel, { passive: false });
+                });
+
+                onUnmounted(() => {
+                    window.removeEventListener('keydown', handleKeydown);
+                    window.removeEventListener('wheel', handleWheel);
+                    if (gameLoop.value) {
+                        cancelAnimationFrame(gameLoop.value);
+                    }
+                });
+
+                return {
+                    isDragging,
+                    isFalling,
+                    isGameOver,
+                    bounceCount,
+                    finalBounceCount,
+                    gameTime,
+                    finalGameTime,
+                    gameStatusText,
+                    zoomPercent,
+                    wrapperStyle,
+                    basketballStyle,
+                    shadowStyle,
+                    handleMouseDown,
+                    handleMouseMove,
+                    handleMouseUp,
+                    restartGame
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
